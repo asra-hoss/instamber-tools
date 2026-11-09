@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Instamber Tools — engine demo (not the live tools)</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem;color:#1c2430;line-height:1.5}
+  h1{font-size:1.4rem} h2{font-size:1.1rem;margin-top:2rem}
+  .card{border:1px solid #d8dee6;border-radius:10px;padding:1rem 1.1rem;margin:.8rem 0;background:#fbfcfe}
+  input{font-size:1rem;padding:.5rem .6rem;width:220px;border:1px solid #b9c4d0;border-radius:6px}
+  button{font-size:1rem;padding:.5rem .9rem;border:0;border-radius:6px;background:#1463d8;color:#fff;cursor:pointer}
+  .out{white-space:pre-wrap;background:#0f1722;color:#dce7f5;border-radius:8px;padding:.7rem .9rem;margin-top:.7rem;font-size:.86rem;min-height:1.2em}
+  small{color:#5a6a7d}
+</style>
+</head>
+<body>
+<h1>Instamber lookup engine — demo</h1>
+<p><small>Working schematic of the five sibling tools for instamber.com. One shared engine
+(<code>lookup.js</code> + <code>data.json</code>), five framings. Data: NANPA &amp; Canadian
+Numbering Administrator public records. Demo page only — the live tools will live on instamber.com.</small></p>
+
+<div class="card"><h2>1 · Carrier Lookup</h2>
+<input id="in-carrier" placeholder="e.g. 907 201 0142"><button data-tool="carrier">Look up carrier</button>
+<div class="out" id="out-carrier">Carrier, line type and region for any US/Canadian number.</div></div>
+
+<div class="card"><h2>2 · VoIP Number Checker</h2>
+<input id="in-voip" placeholder="e.g. 201 351 0142"><button data-tool="voip">Check if VoIP</button>
+<div class="out" id="out-voip">Answers one question: is this a VoIP (internet/app) line?</div></div>
+
+<div class="card"><h2>3 · Google Voice Number Lookup</h2>
+<input id="in-gv" placeholder="e.g. 201 201 0142"><button data-tool="gv">Check for Google Voice</button>
+<div class="out" id="out-gv">Checks the number's block against the carriers Google Voice uses.</div></div>
+
+<div class="card"><h2>4 · Text App Number Checker</h2>
+<input id="in-app" placeholder="e.g. 204 400 0142"><button data-tool="app">Check for texting apps</button>
+<div class="out" id="out-app">Flags numbers from TextNow, TextFree and other texting-app suppliers.</div></div>
+
+<div class="card"><h2>5 · Area Code Lookup</h2>
+<input id="in-ac" placeholder="e.g. 416" maxlength="3"><button data-tool="ac">Look up area code</button>
+<div class="out" id="out-ac">State/province, country, time zone and main city for an area code.</div></div>
+
+<script src="lookup.js"></script>
+<script src="areacode.js"></script>
+<script>
+function lines(r){
+  if(!r.valid) return "✗ " + r.error;
+  var L = [];
+  L.push(r.formatted);
+  if(r.carrier) L.push("Carrier: " + r.carrier);
+  L.push("Line type: " + r.lineTypeLabel);
+  if(r.region) L.push("Region: " + [r.region.city, r.region.state, r.region.country].filter(Boolean).join(", "));
+  if(r.isAppNumber) L.push("App number: YES — " + r.appFamily);
+  L.push("Note: " + r.note);
+  return L.join("\n");
+}
+var render = {
+  carrier: function(r){ return lines(r); },
+  voip: function(r){
+    if(!r.valid) return "✗ " + r.error;
+    var verdict = r.lineType === "voip" ? "YES — this is a VoIP (internet/app) line."
+      : r.lineType === "mobile" ? "NO — this block belongs to a mobile carrier."
+      : r.lineType === "landline" ? "NO — this block belongs to a landline carrier."
+      : "Can't tell from public records for this number.";
+    return verdict + "\n\n" + lines(r);
+  },
+  gv: function(r){
+    if(!r.valid) return "✗ " + r.error;
+    var gv = r.apps && r.apps.indexOf("Google Voice") >= 0;
+    var verdict = gv ? "POSSIBLE Google Voice number — its block sits on a wholesale carrier Google Voice uses (" +
+        r.carrier + "). Numbering records can't prove it: the same blocks also serve other apps."
+      : r.lineType === "voip" ? "Unlikely — this is a VoIP line, but not on a carrier Google Voice is known to use."
+      : "Unlikely — Google Voice numbers are VoIP; this block is " + r.lineTypeLabel.toLowerCase() + ".";
+    return verdict + "\n\n" + lines(r);
+  },
+  app: function(r){
+    if(!r.valid) return "✗ " + r.error;
+    var verdict = r.isAppNumber ? "LIKELY an app number — " + r.appFamily
+      : r.lineType === "voip" ? "It's a VoIP line (an online phone service), though not one of the big texting-app suppliers."
+      : "No sign of a texting app — this block belongs to a " + r.lineTypeLabel.toLowerCase() + " carrier.";
+    return verdict + "\n\n" + lines(r);
+  }
+};
+document.querySelectorAll("button[data-tool]").forEach(function(b){
+  b.addEventListener("click", function(){
+    var tool = b.getAttribute("data-tool");
+    var input = document.getElementById("in-" + tool);
+    var out = document.getElementById("out-" + tool);
+    if(tool === "ac"){
+      var info = InstamberAreaCode.lookup(input.value);
+      out.textContent = info ? JSON.stringify(info, null, 1) : "✗ Unknown or invalid area code.";
+      return;
+    }
+    out.textContent = "Looking up…";
+    InstamberLookup.lookup(input.value).then(function(r){ out.textContent = render[tool](r); })
+      .catch(function(e){ out.textContent = "✗ " + e.message; });
+  });
+});
+</script>
+</body>
+</html>
