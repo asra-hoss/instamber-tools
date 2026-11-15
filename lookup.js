@@ -60,6 +60,75 @@
     return d;
   }
 
+  /* NANPA's NPA report stores some primary cities as truncated rate-centre
+   * codes ("Wshngtnzn1", "Nwyrcyzn01", "Lsan Da 01", "Scrm Main" ...).
+   * Plain-English overrides for the ones that can be named confidently.
+   * Deliberately NOT mapped (ambiguous): 310 "Cmtn Grdn", 341 "Frnk Main",
+   * 610 "Phphsbzn30" — these keep the raw NANPA string until confirmed. */
+  var CITY_FIXES = {
+    "202": "Washington", "227": "Washington", "240": "Washington",
+    "301": "Washington", "571": "Washington", "703": "Washington",
+    "771": "Washington",
+    "212": "New York City", "332": "New York City", "347": "New York City",
+    "646": "New York City", "718": "New York City", "917": "New York City",
+    "929": "New York City",
+    "213": "Los Angeles", "323": "Los Angeles", "738": "Los Angeles",
+    "215": "Philadelphia", "267": "Philadelphia", "445": "Philadelphia",
+    "223": "Harrisburg", "717": "Harrisburg",
+    "304": "Charleston", "681": "Charleston",
+    "312": "Chicago", "773": "Chicago", "872": "Chicago",
+    "313": "Detroit",
+    "363": "Nassau", "516": "Nassau",
+    "412": "Pittsburgh", "878": "Pittsburgh",
+    "414": "Milwaukee",
+    "757": "Norfolk", "948": "Norfolk",
+    "914": "Westchester",
+    "210": "San Antonio", "726": "San Antonio",
+    "217": "Springfield", "413": "Springfield", "417": "Springfield",
+    "225": "Baton Rouge",
+    "272": "Williamsport",
+    "279": "Sacramento", "916": "Sacramento",
+    "308": "Grand Island",
+    "317": "Indianapolis", "463": "Indianapolis",
+    "319": "Cedar Rapids",
+    "324": "Jacksonville", "904": "Jacksonville",
+    "329": "Poughkeepsie", "845": "Poughkeepsie",
+    "340": "Charlotte Amalie",
+    "361": "Corpus Christi",
+    "364": "Bowling Green",
+    "661": "Bakersfield"
+  };
+
+  /* NANPA rate-centre names carry the same truncated codes as the NPA
+   * cities ("Wshngtnzn1", "Nwyrcyzn01", "Lsan Da 01", "Bkfd Main" ...).
+   * cleanRateCentre strips the zone/exchange suffix and expands stems it
+   * knows; anything unrecognised is returned untouched, never made worse.
+   * Deliberately NOT expanded (ambiguous): "Phphsb" (Philadelphia suburbs),
+   * "Frnk", "Snra", "Wtfr", "Ptlm", "Aubn", "Grvy" — "Harbour Main" is a
+   * real place name and stays as-is. */
+  var RC_STEMS = {
+    "Wshngtn": "Washington", "Wsngtn": "Washington",
+    "Chicgo": "Chicago", "Detroit": "Detroit",
+    "Nwyrcy": "New York City", "Nassau": "Nassau",
+    "Wschst": "Westchester", "Phldlph": "Philadelphia",
+    "Harisbg": "Harrisburg", "Ptgsbn": "Pittsburgh", "Pttsbg": "Pittsburgh",
+    "Nrfolk": "Norfolk", "Nwptnws": "Newport News",
+    "Milwauk": "Milwaukee", "Chrlstn": "Charleston",
+    "Hntngtn": "Huntington", "Prkrsbg": "Parkersburg",
+    "Whelng": "Wheeling", "Lsan": "Los Angeles",
+    "Scrm": "Sacramento", "Bkfd": "Bakersfield", "Rsvl": "Roseville"
+  };
+
+  function cleanRateCentre(name) {
+    if (!name) return "";
+    var s = String(name), m;
+    if ((m = s.match(/^(.+?)\s+Da \d+$/))) s = m[1];
+    else if ((m = s.match(/^(.+?)\s+Main$/))) s = m[1];
+    else if ((m = s.match(/^(.+?)(?:zn|zon)\d+$/i))) s = m[1];
+    else return name;
+    return RC_STEMS[s] || name;
+  }
+
   function areaOf(npa) {
     var a = AREAS[npa];
     if (!a) return null;
@@ -69,7 +138,7 @@
       country: a.country || "",
       timezone: a.tz || "",
       timezoneIana: a.tzIana || "",
-      primaryCity: a.city || "",
+      primaryCity: CITY_FIXES[npa] || a.city || "",
       service: a.service || "",
     };
   }
@@ -160,7 +229,7 @@
       }
       var rcName = data.rc[hit[2]];
       res.region = {
-        city: rcName || (area && area.primaryCity) || "",
+        city: cleanRateCentre(rcName) || (area && area.primaryCity) || "",
         state: area ? area.state : "",
         country: area ? area.country : "",
         rateCenter: rcName || "",
